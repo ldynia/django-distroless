@@ -1,33 +1,27 @@
-FROM python:3.7.9-alpine
+FROM python:3.7.9-alpine AS BUILDER
+
+WORKDIR /app
+COPY . /app
+
+RUN pip install -r requirements.txt
+RUN rm -f requirements.txt
+
+# Distroless python3
+FROM gcr.io/distroless/python3-debian10
 
 ARG PORT=8000
 ENV PORT=$PORT
 
 ENV HOME=/app
 ENV PYTHONUNBUFFERED=True
-ENV PYTHONIOENCODING=UTF-8
+ENV PYTHONPATH=/usr/lib/python3.7/site-packages
+
+COPY --from=BUILDER /app /app
+COPY --from=BUILDER /usr/local/lib/python3.7/site-packages /usr/lib/python3.7/site-packages
 
 WORKDIR /app
-COPY . /app
-
-RUN apk add \
-    curl
-
-# Fixed permissions, create exec:exec and dev:dev
-RUN sed -i '/999/d;' /etc/group
-RUN addgroup -S -g 999 exec && adduser -u 999 -SDHG exec exec
-RUN adduser -DH dev && adduser exec dev
-RUN chown -R exec:dev \
-    /app \
-    /usr/local/bin/ \
-    /usr/local/lib/python3.7/
-RUN chmod -R a-w /etc
 
 EXPOSE ${PORT}
 VOLUME /app
 
-HEALTHCHECK CMD curl -f http://localhost:${PORT}/ || exit 1
-
-USER exec:dev
-
-ENTRYPOINT ["/app/scripts/startup.sh"]
+CMD ["/app/manage.py", "runserver", "0.0.0.0:8000"]
